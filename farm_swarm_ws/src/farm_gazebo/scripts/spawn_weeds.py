@@ -1,160 +1,165 @@
 #!/usr/bin/env python3
 """
 spawn_weeds.py
-Gazebo Harmonic上に雑草モデルをランダムに配置するROS 2ノード
+Gazebo Harmonic上に雑草モデルをランダムに配置するスクリプト
 
-使用方法:
-  ros2 run farm_gazebo spawn_weeds.py
-  ros2 run farm_gazebo spawn_weeds.py --ros-args -p num_weeds:=60 -p field_size:=16.0
+ros_gz_sim create コマンドをサブプロセスで呼び出すことで
+SpawnEntityサービスへの依存を排除し、確実にスポーンを行う。
 """
-import rclpy
-from rclpy.node import Node
-from ros_gz_interfaces.srv import SpawnEntity
-import random
 import math
 import os
+import random
+import subprocess
+import sys
+import time
+
+try:
+    from ament_index_python.packages import get_package_share_directory
+    _PKG_MODELS = os.path.join(
+        get_package_share_directory('farm_gazebo'), 'models'
+    )
+except Exception:
+    _PKG_MODELS = ''
+
+# ---- 設定パラメータ (環境変数で上書き可能) ----
+NUM_WEEDS        = int(os.getenv('WEED_COUNT',       '40'))
+FIELD_SIZE       = float(os.getenv('FIELD_SIZE',     '18.0'))
+SMALL_RATIO      = float(os.getenv('SMALL_RATIO',    '0.65'))
+EXCL_RADIUS      = float(os.getenv('EXCL_RADIUS',    '2.5'))
+SPAWN_TIMEOUT    = float(os.getenv('SPAWN_TIMEOUT',  '8.0'))
 
 
-class WeedSpawner(Node):
-    def __init__(self):
-        super().__init__('weed_spawner')
+def find_model_sdf(model_type: str) -> str | None:
+    """モデルSDFファイルを探索してパスを返す。見つからなければNone。"""
+    candidates = [
+        _PKG_MODELS,
+        os.path.expanduser('~/.gz/models'),
+        os.path.expanduser('~/.gazebo/models'),
+    ]
+    # AMENT_PREFIX_PATH 内のすべてのshareディレクトリを検索
+    for prefix in os.getenv('AMENT_PREFIX_PATH', '').split(':'):
+        candidates.append(os.path.join(prefix, 'share', 'farm_gazebo', 'models'))
 
-        # パラメータ宣言
-        self.declare_parameter('num_weeds',  40)
-        self.declare_parameter('field_size', 18.0)   # フィールド有効範囲 [m]
-        self.declare_parameter('small_ratio', 0.6)   # 小型雑草の割合
-        self.declare_parameter('exclusion_radius', 2.0)  # 原点周辺のスポーン除外半径
-        self.declare_parameter('model_base_path', '')    # カスタムモデルパス
+    for base in candidates:
+        if not base:
+            continue
+        path = os.path.join(base, model_type, 'model.sdf')
+        if os.path.isfile(path):
+            return path
+    return None
 
-        # SpawnEntityサービスクライアント
-        self.spawn_client = self.create_client(
-            SpawnEntity, '/world/farm_field/create'
+
+def generate_inline_sdf(name: str, model_type: str) -> str:
+    """モデルファイルが見つからない場合のインラインSDF"""
+    if model_type == 'weed_small':
+        radius, height = 0.06, 0.12
+    else:
+        radius, height = 0.12, 0.25
+    return (
+        f'<?xml version="1.0"?>'
+        f'<sdf version="1.9">'
+        f'<model name="{name}">'
+        f'<static>true</static>'
+        f'<link name="weed_link">'
+        f'<visual name="v"><pose>0 0 {height/2:.3f} 0 0 0</pose>'
+        f'<geometry><cylinder><radius>{radius}</radius>'
+        f'<length>{height}</length></cylinder></geometry>'
+        f'<material><ambient>0.1 0.6 0.1 1</ambient></material></visual>'
+        f'<collision name="c"><pose>0 0 {height/2:.3f} 0 0 0</pose>'
+        f'<geometry><cylinder><radius>{radius}</radius>'
+        f'<length>{height}</length></cylinder></geometry></collision>'
+        f'</link></model></sdf>'
+    )
+
+
+def spawn_entity(name: str, sdf_path: str | None, sdf_str: str | None,
+                 x: float, y: float, yaw: float) -> bool:
+    """ros2 run ros_gz_sim create でエンティティをスポーンする"""
+    cmd = [
+        'ros2', 'run', 'ros_gz_sim', 'create',
+        '-name', name,
+        '-x', f'{x:.4f}',
+        '-y', f'{y:.4f}',
+        '-z', '0.005',
+        '-Y', f'{yaw:.4f}',
+    ]
+
+    if sdf_path:
+        cmd += ['-file', sdf_path]
+    else:
+        # インラインSDFを一時ファイルに書き出す
+        import tempfile
+        with tempfile.NamedTemporaryFile(
+            mode='w', suffix='.sdf', delete=False
+        ) as tmp:
+            tmp.write(sdf_str)
+            tmp_path = tmp.name
+        cmd += ['-file', tmp_path]
+
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=SPAWN_TIMEOUT,
         )
-        self.get_logger().info('SpawnEntityサービス待機中...')
-        if not self.spawn_client.wait_for_service(timeout_sec=15.0):
-            self.get_logger().error(
-                'SpawnEntityサービスが見つかりません。Gazeboが起動しているか確認してください。'
-            )
-            return
-        self.get_logger().info('SpawnEntityサービス接続完了')
+        if sdf_path is None and 'tmp_path' in locals():
+            os.unlink(tmp_path)
 
-    def spawn_all_weeds(self):
-        num_weeds   = self.get_parameter('num_weeds').value
-        field_size  = self.get_parameter('field_size').value
-        small_ratio = self.get_parameter('small_ratio').value
-        excl_r      = self.get_parameter('exclusion_radius').value
-
-        spawned = 0
-        attempts = 0
-        max_attempts = num_weeds * 5
-
-        while spawned < num_weeds and attempts < max_attempts:
-            attempts += 1
-            half = field_size / 2.0
-            x = random.uniform(-half, half)
-            y = random.uniform(-half, half)
-
-            # 原点周辺 (ロボット初期位置) には配置しない
-            if math.sqrt(x**2 + y**2) < excl_r:
-                continue
-
-            weed_type = 'weed_small' if random.random() < small_ratio else 'weed_large'
-            yaw = random.uniform(0, math.pi * 2)
-            name = f'weed_{spawned:03d}'
-
-            success = self._spawn_model(name, weed_type, x, y, yaw)
-            if success:
-                spawned += 1
-                if spawned % 10 == 0:
-                    self.get_logger().info(f'{spawned}/{num_weeds} 本の雑草を配置しました')
-
-        self.get_logger().info(
-            f'雑草配置完了: {spawned}/{num_weeds} 本 (試行回数: {attempts})'
-        )
-
-    def _spawn_model(self, name: str, model_type: str, x: float, y: float, yaw: float) -> bool:
-        """SDFモデルをGazeboにスポーンする"""
-        # モデルパスを探索
-        model_dirs = [
-            self.get_parameter('model_base_path').value,
-            os.path.join(
-                os.getenv('AMENT_PREFIX_PATH', '').split(':')[0],
-                'share', 'farm_gazebo', 'models'
-            ),
-            os.path.expanduser('~/.gz/models'),
-        ]
-
-        sdf_content = None
-        for base in model_dirs:
-            if not base:
-                continue
-            sdf_path = os.path.join(base, model_type, 'model.sdf')
-            if os.path.exists(sdf_path):
-                with open(sdf_path, 'r') as f:
-                    sdf_content = f.read()
-                break
-
-        if sdf_content is None:
-            # フォールバック: インラインSDF
-            sdf_content = self._generate_inline_sdf(name, model_type)
-
-        req = SpawnEntity.Request()
-        req.xml = sdf_content
-        req.name = name
-        req.initial_pose.position.x = x
-        req.initial_pose.position.y = y
-        req.initial_pose.position.z = 0.0
-        req.initial_pose.orientation.z = math.sin(yaw / 2)
-        req.initial_pose.orientation.w = math.cos(yaw / 2)
-
-        future = self.spawn_client.call_async(req)
-        rclpy.spin_until_future_complete(self, future, timeout_sec=5.0)
-
-        if future.result() is not None and future.result().success:
+        if result.returncode == 0:
             return True
+        print(f'[spawn] 失敗 {name}: {result.stderr.strip()}', file=sys.stderr)
+        return False
+    except subprocess.TimeoutExpired:
+        print(f'[spawn] タイムアウト {name}', file=sys.stderr)
+        return False
+    except Exception as e:
+        print(f'[spawn] エラー {name}: {e}', file=sys.stderr)
+        return False
+
+
+def main() -> None:
+    print(f'[weed_spawner] 雑草スポーン開始: {NUM_WEEDS}本, '
+          f'フィールド{FIELD_SIZE}m x {FIELD_SIZE}m')
+
+    sdf_paths = {
+        'weed_small': find_model_sdf('weed_small'),
+        'weed_large': find_model_sdf('weed_large'),
+    }
+    for model_type, path in sdf_paths.items():
+        if path:
+            print(f'[weed_spawner] モデル発見: {model_type} → {path}')
         else:
-            self.get_logger().warn(f'{name} のスポーンに失敗しました')
-            return False
+            print(f'[weed_spawner] モデルファイル未発見 ({model_type}): インラインSDFを使用')
 
-    def _generate_inline_sdf(self, name: str, model_type: str) -> str:
-        """モデルファイルが見つからない場合のフォールバックSDF"""
-        if model_type == 'weed_small':
-            radius, height = 0.06, 0.12
-        else:
-            radius, height = 0.12, 0.25
+    half      = FIELD_SIZE / 2.0
+    spawned   = 0
+    attempts  = 0
+    max_att   = NUM_WEEDS * 5
 
-        return f"""<?xml version="1.0"?>
-<sdf version="1.9">
-  <model name="{name}">
-    <static>true</static>
-    <link name="weed_link">
-      <visual name="weed_visual">
-        <pose>0 0 {height/2} 0 0 0</pose>
-        <geometry>
-          <cylinder><radius>{radius}</radius><length>{height}</length></cylinder>
-        </geometry>
-        <material>
-          <ambient>0.1 0.6 0.1 1</ambient>
-          <diffuse>0.15 0.7 0.15 1</diffuse>
-        </material>
-      </visual>
-      <collision name="weed_collision">
-        <pose>0 0 {height/2} 0 0 0</pose>
-        <geometry>
-          <cylinder><radius>{radius}</radius><length>{height}</length></cylinder>
-        </geometry>
-      </collision>
-    </link>
-  </model>
-</sdf>"""
+    while spawned < NUM_WEEDS and attempts < max_att:
+        attempts += 1
+        x = random.uniform(-half, half)
+        y = random.uniform(-half, half)
 
+        if math.sqrt(x * x + y * y) < EXCL_RADIUS:
+            continue
 
-def main(args=None):
-    rclpy.init(args=args)
-    node = WeedSpawner()
-    node.spawn_all_weeds()
-    node.destroy_node()
-    rclpy.shutdown()
+        model_type = 'weed_small' if random.random() < SMALL_RATIO else 'weed_large'
+        yaw  = random.uniform(0, math.pi * 2)
+        name = f'weed_{spawned:03d}'
+
+        sdf_path = sdf_paths.get(model_type)
+        sdf_str  = None if sdf_path else generate_inline_sdf(name, model_type)
+
+        if spawn_entity(name, sdf_path, sdf_str, x, y, yaw):
+            spawned += 1
+            if spawned % 10 == 0:
+                print(f'[weed_spawner] {spawned}/{NUM_WEEDS} 本配置完了')
+            time.sleep(0.05)   # Gazeboへの連続リクエストを少し間引く
+
+    print(f'[weed_spawner] 完了: {spawned}/{NUM_WEEDS}本 '
+          f'(試行{attempts}回)')
 
 
 if __name__ == '__main__':

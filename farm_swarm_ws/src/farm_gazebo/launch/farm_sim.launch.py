@@ -120,19 +120,11 @@ def launch_setup(context, *args, **kwargs):
     ])
 
     # ---- 5. 雑草スポーン ----
-    # Gazebo + ロボット起動から10秒後
+    # Node()はlibexecの実行権限が必要なため python3 で直接起動する
+    spawn_script = os.path.join(pkg_gz, 'scripts', 'spawn_weeds.py')
     weed_spawner = TimerAction(period=10.0, actions=[
-        Node(
-            package='farm_gazebo',
-            executable='spawn_weeds.py',
-            name='weed_spawner',
-            parameters=[
-                {'num_weeds':  40},
-                {'field_size': 18.0},
-                {'small_ratio': 0.65},
-                {'exclusion_radius': 2.5},
-                {'model_base_path': os.path.join(pkg_gz, 'models')},
-            ],
+        ExecuteProcess(
+            cmd=['python3', spawn_script],
             output='screen',
         )
     ])
