@@ -1,0 +1,232 @@
+<?xml version="1.0"?>
+<!--
+  farm_field.sdf
+  農地シミュレーションワールド (Gazebo Harmonic用)
+
+  フィールド構成:
+    - 20m × 20m 農地地面
+    - 複数本の畝 (うね)
+    - 外周フェンス (境界)
+-->
+<sdf version="1.9">
+  <world name="farm_field">
+
+    <!-- ======== Gazebo Harmonicシステムプラグイン ======== -->
+    <plugin filename="gz-sim-physics-system"
+            name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-user-commands-system"
+            name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-scene-broadcaster-system"
+            name="gz::sim::systems::SceneBroadcaster"/>
+    <!-- センサレンダリング (LiDAR・カメラに必須) -->
+    <plugin filename="gz-sim-sensors-system"
+            name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+    <!-- IMU -->
+    <plugin filename="gz-sim-imu-system"
+            name="gz::sim::systems::Imu"/>
+    <!-- 接触センサ -->
+    <plugin filename="gz-sim-contact-system"
+            name="gz::sim::systems::Contact"/>
+
+    <!-- ======== 物理設定 ======== -->
+    <physics name="1ms" type="ignored">
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+      <real_time_update_rate>1000</real_time_update_rate>
+    </physics>
+
+    <!-- ======== 照明 ======== -->
+    <light name="sun" type="directional">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 20 0 0 0</pose>
+      <diffuse>0.85 0.85 0.85 1</diffuse>
+      <specular>0.2 0.2 0.2 1</specular>
+      <attenuation>
+        <range>1000</range>
+        <constant>0.9</constant>
+        <linear>0.01</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+      <direction>-0.5 0.1 -0.9</direction>
+    </light>
+
+    <!-- 環境光 -->
+    <light name="ambient_light" type="ambient">
+      <diffuse>0.3 0.3 0.3 1</diffuse>
+    </light>
+
+    <!-- ======== 農地地面 (20m x 20m) ======== -->
+    <model name="farm_ground">
+      <static>true</static>
+      <link name="ground_link">
+        <collision name="ground_collision">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>20 20</size>
+            </plane>
+          </geometry>
+          <surface>
+            <friction>
+              <ode>
+                <mu>0.8</mu>
+                <mu2>0.8</mu2>
+              </ode>
+            </friction>
+          </surface>
+        </collision>
+        <visual name="ground_visual">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>20 20</size>
+            </plane>
+          </geometry>
+          <material>
+            <ambient>0.25 0.18 0.10 1</ambient>
+            <diffuse>0.35 0.25 0.15 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ======== 畝 (うね) x 6列 ======== -->
+    <!-- 畝: Y方向に並ぶ幅0.3m・高さ0.1mの土盛り -->
+    <model name="furrow_row_1">
+      <static>true</static>
+      <pose>0 -7.5 0 0 0 0</pose>
+      <link name="furrow">
+        <collision name="c"><geometry><box><size>18 0.3 0.1</size></box></geometry></collision>
+        <visual name="v">
+          <geometry><box><size>18 0.3 0.1</size></box></geometry>
+          <material><ambient>0.30 0.20 0.12 1</ambient><diffuse>0.40 0.28 0.16 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+    <model name="furrow_row_2">
+      <static>true</static>
+      <pose>0 -4.5 0 0 0 0</pose>
+      <link name="furrow">
+        <collision name="c"><geometry><box><size>18 0.3 0.1</size></box></geometry></collision>
+        <visual name="v">
+          <geometry><box><size>18 0.3 0.1</size></box></geometry>
+          <material><ambient>0.30 0.20 0.12 1</ambient><diffuse>0.40 0.28 0.16 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+    <model name="furrow_row_3">
+      <static>true</static>
+      <pose>0 -1.5 0 0 0 0</pose>
+      <link name="furrow">
+        <collision name="c"><geometry><box><size>18 0.3 0.1</size></box></geometry></collision>
+        <visual name="v">
+          <geometry><box><size>18 0.3 0.1</size></box></geometry>
+          <material><ambient>0.30 0.20 0.12 1</ambient><diffuse>0.40 0.28 0.16 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+    <model name="furrow_row_4">
+      <static>true</static>
+      <pose>0 1.5 0 0 0 0</pose>
+      <link name="furrow">
+        <collision name="c"><geometry><box><size>18 0.3 0.1</size></box></geometry></collision>
+        <visual name="v">
+          <geometry><box><size>18 0.3 0.1</size></box></geometry>
+          <material><ambient>0.30 0.20 0.12 1</ambient><diffuse>0.40 0.28 0.16 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+    <model name="furrow_row_5">
+      <static>true</static>
+      <pose>0 4.5 0 0 0 0</pose>
+      <link name="furrow">
+        <collision name="c"><geometry><box><size>18 0.3 0.1</size></box></geometry></collision>
+        <visual name="v">
+          <geometry><box><size>18 0.3 0.1</size></box></geometry>
+          <material><ambient>0.30 0.20 0.12 1</ambient><diffuse>0.40 0.28 0.16 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+    <model name="furrow_row_6">
+      <static>true</static>
+      <pose>0 7.5 0 0 0 0</pose>
+      <link name="furrow">
+        <collision name="c"><geometry><box><size>18 0.3 0.1</size></box></geometry></collision>
+        <visual name="v">
+          <geometry><box><size>18 0.3 0.1</size></box></geometry>
+          <material><ambient>0.30 0.20 0.12 1</ambient><diffuse>0.40 0.28 0.16 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ======== 外周フェンス ======== -->
+    <model name="fence_north">
+      <static>true</static>
+      <pose>0 10 0.5 0 0 0</pose>
+      <link name="fence">
+        <collision name="c"><geometry><box><size>20 0.1 1.0</size></box></geometry></collision>
+        <visual name="v">
+          <geometry><box><size>20 0.1 1.0</size></box></geometry>
+          <material><ambient>0.6 0.4 0.2 1</ambient></material>
+        </visual>
+      </link>
+    </model>
+    <model name="fence_south">
+      <static>true</static>
+      <pose>0 -10 0.5 0 0 0</pose>
+      <link name="fence">
+        <collision name="c"><geometry><box><size>20 0.1 1.0</size></box></geometry></collision>
+        <visual name="v">
+          <geometry><box><size>20 0.1 1.0</size></box></geometry>
+          <material><ambient>0.6 0.4 0.2 1</ambient></material>
+        </visual>
+      </link>
+    </model>
+    <model name="fence_east">
+      <static>true</static>
+      <pose>10 0 0.5 0 0 0</pose>
+      <link name="fence">
+        <collision name="c"><geometry><box><size>0.1 20 1.0</size></box></geometry></collision>
+        <visual name="v">
+          <geometry><box><size>0.1 20 1.0</size></box></geometry>
+          <material><ambient>0.6 0.4 0.2 1</ambient></material>
+        </visual>
+      </link>
+    </model>
+    <model name="fence_west">
+      <static>true</static>
+      <pose>-10 0 0.5 0 0 0</pose>
+      <link name="fence">
+        <collision name="c"><geometry><box><size>0.1 20 1.0</size></box></geometry></collision>
+        <visual name="v">
+          <geometry><box><size>0.1 20 1.0</size></box></geometry>
+          <material><ambient>0.6 0.4 0.2 1</ambient></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ======== GUIカメラ初期視点 ======== -->
+    <gui fullscreen="0">
+      <plugin filename="MinimalScene" name="3D View">
+        <gz-gui>
+          <title>3D View</title>
+          <property type="bool" key="showTitleBar">false</property>
+        </gz-gui>
+        <engine>ogre2</engine>
+        <scene>scene</scene>
+        <ambient_light>0.4 0.4 0.4</ambient_light>
+        <background_color>0.5 0.7 0.9</background_color>
+        <camera_pose>-15 0 12 0 0.7 0</camera_pose>
+      </plugin>
+      <plugin filename="EntityContextMenuPlugin" name="Entity context menu"/>
+      <plugin filename="GzSceneManager" name="Scene Manager"/>
+      <plugin filename="InteractiveViewControl" name="Interactive view control"/>
+      <plugin filename="TransformControl" name="Transform control"/>
+      <plugin filename="Shapes" name="Shapes"/>
+      <plugin filename="KeyPublisher" name="Key publisher"/>
+    </gui>
+
+  </world>
+</sdf>

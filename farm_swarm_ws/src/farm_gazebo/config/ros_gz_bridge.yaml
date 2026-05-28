@@ -1,0 +1,153 @@
+# ros_gz_bridge.yaml
+# GazeboトピックとROS 2トピックのブリッジ設定
+# 方向: ROS_TO_GZ / GZ_TO_ROS / BIDIRECTIONAL
+
+# ===================== Robot 1 (Scout) =====================
+
+# 速度指令 (ROS2 → Gazebo)
+- ros_topic_name: "/robot1/cmd_vel"
+  gz_topic_name: "/robot1/cmd_vel"
+  ros_type_name: "geometry_msgs/msg/Twist"
+  gz_type_name: "gz.msgs.Twist"
+  direction: ROS_TO_GZ
+
+# オドメトリ (Gazebo → ROS2)
+- ros_topic_name: "/robot1/odom"
+  gz_topic_name: "/robot1/odom"
+  ros_type_name: "nav_msgs/msg/Odometry"
+  gz_type_name: "gz.msgs.Odometry"
+  direction: GZ_TO_ROS
+
+# ジョイント状態 (Gazebo → ROS2)
+- ros_topic_name: "/robot1/joint_states"
+  gz_topic_name: "/robot1/joint_states"
+  ros_type_name: "sensor_msgs/msg/JointState"
+  gz_type_name: "gz.msgs.Model"
+  direction: GZ_TO_ROS
+
+# LiDAR点群 (Gazebo → ROS2)
+- ros_topic_name: "/robot1/lidar/points"
+  gz_topic_name: "/robot1/lidar/points"
+  ros_type_name: "sensor_msgs/msg/PointCloud2"
+  gz_type_name: "gz.msgs.PointCloudPacked"
+  direction: GZ_TO_ROS
+
+# 前方RGBDカメラ - RGB画像
+- ros_topic_name: "/robot1/rgbd/robot1_front/image"
+  gz_topic_name: "/robot1/rgbd/robot1_front/image"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  direction: GZ_TO_ROS
+
+# 前方RGBDカメラ - 深度画像
+- ros_topic_name: "/robot1/rgbd/robot1_front/depth_image"
+  gz_topic_name: "/robot1/rgbd/robot1_front/depth_image"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  direction: GZ_TO_ROS
+
+# 前方RGBDカメラ - 点群
+- ros_topic_name: "/robot1/rgbd/robot1_front/points"
+  gz_topic_name: "/robot1/rgbd/robot1_front/points"
+  ros_type_name: "sensor_msgs/msg/PointCloud2"
+  gz_type_name: "gz.msgs.PointCloudPacked"
+  direction: GZ_TO_ROS
+
+# ===================== Robot 2 (Weeder) =====================
+
+- ros_topic_name: "/robot2/cmd_vel"
+  gz_topic_name: "/robot2/cmd_vel"
+  ros_type_name: "geometry_msgs/msg/Twist"
+  gz_type_name: "gz.msgs.Twist"
+  direction: ROS_TO_GZ
+
+- ros_topic_name: "/robot2/odom"
+  gz_topic_name: "/robot2/odom"
+  ros_type_name: "nav_msgs/msg/Odometry"
+  gz_type_name: "gz.msgs.Odometry"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/robot2/joint_states"
+  gz_topic_name: "/robot2/joint_states"
+  ros_type_name: "sensor_msgs/msg/JointState"
+  gz_type_name: "gz.msgs.Model"
+  direction: GZ_TO_ROS
+
+# 側方RGBDカメラ
+- ros_topic_name: "/robot2/rgbd/robot2_side/image"
+  gz_topic_name: "/robot2/rgbd/robot2_side/image"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/robot2/rgbd/robot2_side/depth_image"
+  gz_topic_name: "/robot2/rgbd/robot2_side/depth_image"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/robot2/rgbd/robot2_side/points"
+  gz_topic_name: "/robot2/rgbd/robot2_side/points"
+  ros_type_name: "sensor_msgs/msg/PointCloud2"
+  gz_type_name: "gz.msgs.PointCloudPacked"
+  direction: GZ_TO_ROS
+
+# ===================== Robot 3 (Collector) =====================
+
+- ros_topic_name: "/robot3/cmd_vel"
+  gz_topic_name: "/robot3/cmd_vel"
+  ros_type_name: "geometry_msgs/msg/Twist"
+  gz_type_name: "gz.msgs.Twist"
+  direction: ROS_TO_GZ
+
+- ros_topic_name: "/robot3/odom"
+  gz_topic_name: "/robot3/odom"
+  ros_type_name: "nav_msgs/msg/Odometry"
+  gz_type_name: "gz.msgs.Odometry"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/robot3/joint_states"
+  gz_topic_name: "/robot3/joint_states"
+  ros_type_name: "sensor_msgs/msg/JointState"
+  gz_type_name: "gz.msgs.Model"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/robot3/rgbd/robot3_front/image"
+  gz_topic_name: "/robot3/rgbd/robot3_front/image"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/robot3/rgbd/robot3_front/depth_image"
+  gz_topic_name: "/robot3/rgbd/robot3_front/depth_image"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/robot3/rgbd/robot3_front/points"
+  gz_topic_name: "/robot3/rgbd/robot3_front/points"
+  ros_type_name: "sensor_msgs/msg/PointCloud2"
+  gz_type_name: "gz.msgs.PointCloudPacked"
+  direction: GZ_TO_ROS
+
+# ===================== 共通 =====================
+
+# TFブリッジ (双方向)
+- ros_topic_name: "/tf"
+  gz_topic_name: "/tf"
+  ros_type_name: "tf2_msgs/msg/TFMessage"
+  gz_type_name: "gz.msgs.Pose_V"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/tf_static"
+  gz_topic_name: "/tf_static"
+  ros_type_name: "tf2_msgs/msg/TFMessage"
+  gz_type_name: "gz.msgs.Pose_V"
+  direction: GZ_TO_ROS
+
+# クロック同期
+- ros_topic_name: "/clock"
+  gz_topic_name: "/clock"
+  ros_type_name: "rosgraph_msgs/msg/Clock"
+  gz_type_name: "gz.msgs.Clock"
+  direction: GZ_TO_ROS

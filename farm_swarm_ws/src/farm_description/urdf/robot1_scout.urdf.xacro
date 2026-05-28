@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<!--
+  Robot ① 先導ロボット (Scout)
+  搭載センサ:
+    - VLP-16相当 3D LiDAR (上部中央)
+    - RealSense D435 RGBD (前方)
+  役割: 環境地図生成・セマンティックマッピング・先導走行
+-->
+<robot name="robot1" xmlns:xacro="http://ros.org/wiki/xacro">
+
+  <xacro:include filename="$(find farm_description)/urdf/common/base.urdf.xacro"/>
+  <xacro:include filename="$(find farm_description)/urdf/common/lidar.urdf.xacro"/>
+  <xacro:include filename="$(find farm_description)/urdf/common/rgbd.urdf.xacro"/>
+
+  <!-- 差動駆動台車 (青色) -->
+  <xacro:diff_drive_base robot_name="robot1" color="grey"/>
+
+  <!-- LiDAR: 車体上部中央 -->
+  <xacro:velodyne_lidar
+    prefix="robot1"
+    parent="robot1/base_link"
+    xyz="0.0 0.0 0.20"
+    rpy="0.0 0.0 0.0"/>
+
+  <!-- 前方RGBD: 前端・前方斜め下向き -->
+  <xacro:realsense_d435
+    prefix="robot1_front"
+    parent="robot1/base_link"
+    xyz="0.20 0.0 0.12"
+    rpy="0.0 0.2 0.0"
+    robot="robot1"/>
+
+</robot>
