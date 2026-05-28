@@ -1,0 +1,91 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+
+  <!--
+    3D LiDARマクロ (VLP-16相当)
+    params:
+      prefix  - ロボット名 (例: robot1)
+      parent  - 取付親リンク名
+      xyz     - 取付位置 "x y z"
+      rpy     - 取付姿勢 "roll pitch yaw"
+  -->
+  <xacro:macro name="velodyne_lidar" params="prefix parent xyz rpy">
+
+    <joint name="${prefix}/lidar_joint" type="fixed">
+      <parent link="${parent}"/>
+      <child  link="${prefix}/lidar_link"/>
+      <origin xyz="${xyz}" rpy="${rpy}"/>
+    </joint>
+
+    <link name="${prefix}/lidar_link">
+      <!-- ボディ (円筒) -->
+      <visual>
+        <origin xyz="0 0 -0.035" rpy="0 0 0"/>
+        <geometry>
+          <cylinder radius="0.0516" length="0.0717"/>
+        </geometry>
+        <material name="dark_grey"/>
+      </visual>
+      <!-- センサ頂部 (回転ヘッド) -->
+      <visual>
+        <origin xyz="0 0 0.0" rpy="0 0 0"/>
+        <geometry>
+          <cylinder radius="0.040" length="0.040"/>
+        </geometry>
+        <material name="black"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 -0.015" rpy="0 0 0"/>
+        <geometry>
+          <cylinder radius="0.0516" length="0.0917"/>
+        </geometry>
+      </collision>
+      <inertial>
+        <mass value="0.830"/>
+        <inertia
+          ixx="0.000304" ixy="0.0" ixz="0.0"
+          iyy="0.000304" iyz="0.0"
+          izz="0.000350"/>
+      </inertial>
+    </link>
+
+    <!-- Gazebo Harmonicセンサ定義 -->
+    <gazebo reference="${prefix}/lidar_link">
+      <sensor name="${prefix}_lidar_sensor" type="gpu_lidar">
+        <gz_frame_id>${prefix}/lidar_link</gz_frame_id>
+        <update_rate>10</update_rate>
+        <topic>/${prefix}/lidar/points</topic>
+        <always_on>true</always_on>
+        <visualize>false</visualize>
+        <lidar>
+          <scan>
+            <horizontal>
+              <samples>360</samples>
+              <resolution>1</resolution>
+              <min_angle>-3.14159265</min_angle>
+              <max_angle>3.14159265</max_angle>
+            </horizontal>
+            <vertical>
+              <samples>16</samples>
+              <resolution>1</resolution>
+              <min_angle>-0.261799</min_angle>  <!-- -15 deg -->
+              <max_angle>0.261799</max_angle>   <!-- +15 deg -->
+            </vertical>
+          </scan>
+          <range>
+            <min>0.1</min>
+            <max>100.0</max>
+            <resolution>0.001</resolution>
+          </range>
+          <noise>
+            <type>gaussian</type>
+            <mean>0.0</mean>
+            <stddev>0.008</stddev>
+          </noise>
+        </lidar>
+      </sensor>
+    </gazebo>
+
+  </xacro:macro>
+
+</robot>

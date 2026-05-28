@@ -1,0 +1,57 @@
+<?xml version="1.0"?>
+<sdf version="1.9">
+  <model name="weed_large">
+    <static>true</static>
+    <link name="weed_link">
+      <!-- 太い茎 -->
+      <visual name="stem">
+        <pose>0 0 0.10 0 0 0</pose>
+        <geometry>
+          <cylinder><radius>0.015</radius><length>0.20</length></cylinder>
+        </geometry>
+        <material>
+          <ambient>0.08 0.45 0.08 1</ambient>
+          <diffuse>0.10 0.55 0.10 1</diffuse>
+        </material>
+      </visual>
+      <!-- 大きな葉群 -->
+      <visual name="foliage_main">
+        <pose>0 0 0.25 0 0 0</pose>
+        <geometry>
+          <sphere><radius>0.12</radius></sphere>
+        </geometry>
+        <material>
+          <ambient>0.10 0.55 0.10 1</ambient>
+          <diffuse>0.14 0.65 0.12 1</diffuse>
+        </material>
+      </visual>
+      <visual name="foliage_left">
+        <pose>-0.08 0 0.18 0 0 0</pose>
+        <geometry>
+          <sphere><radius>0.07</radius></sphere>
+        </geometry>
+        <material>
+          <ambient>0.12 0.50 0.08 1</ambient>
+          <diffuse>0.16 0.62 0.10 1</diffuse>
+        </material>
+      </visual>
+      <visual name="foliage_right">
+        <pose>0.08 0 0.18 0 0 0</pose>
+        <geometry>
+          <sphere><radius>0.07</radius></sphere>
+        </geometry>
+        <material>
+          <ambient>0.12 0.50 0.08 1</ambient>
+          <diffuse>0.16 0.62 0.10 1</diffuse>
+        </material>
+      </visual>
+      <!-- コリジョン -->
+      <collision name="weed_collision">
+        <pose>0 0 0.12 0 0 0</pose>
+        <geometry>
+          <cylinder><radius>0.12</radius><length>0.24</length></cylinder>
+        </geometry>
+      </collision>
+    </link>
+  </model>
+</sdf>

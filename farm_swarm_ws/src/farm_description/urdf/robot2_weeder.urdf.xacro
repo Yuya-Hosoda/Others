@@ -1,0 +1,64 @@
+<?xml version="1.0"?>
+<!--
+  Robot ② 除草ロボット (Weeder)
+  搭載センサ・機器:
+    - RealSense D435 RGBD (右側面: 雑草検出)
+    - 回転除草刃 (右側面下部)
+  役割: 雑草検出・除草機駆動
+-->
+<robot name="robot2" xmlns:xacro="http://ros.org/wiki/xacro">
+
+  <xacro:include filename="$(find farm_description)/urdf/common/base.urdf.xacro"/>
+  <xacro:include filename="$(find farm_description)/urdf/common/rgbd.urdf.xacro"/>
+
+  <!-- 差動駆動台車 (緑色) -->
+  <xacro:diff_drive_base robot_name="robot2" color="green"/>
+
+  <!-- 右側方RGBD: 除草対象検出用 -->
+  <xacro:realsense_d435
+    prefix="robot2_side"
+    parent="robot2/base_link"
+    xyz="0.0 -0.20 0.12"
+    rpy="0.0 0.3 ${-PI/2}"
+    robot="robot2"/>
+
+  <!-- 除草機構: 回転刃 (右側面下部) -->
+  <joint name="robot2/weeder_joint" type="continuous">
+    <parent link="robot2/base_link"/>
+    <child  link="robot2/weeder_blade"/>
+    <origin xyz="0.05 -0.28 -0.04" rpy="0.0 0.0 0.0"/>
+    <axis xyz="0 0 1"/>
+    <dynamics damping="0.05"/>
+  </joint>
+
+  <link name="robot2/weeder_blade">
+    <visual>
+      <geometry>
+        <cylinder radius="0.14" length="0.018"/>
+      </geometry>
+      <material name="silver"/>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.14" length="0.018"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="1.2"/>
+      <inertia
+        ixx="0.00238" ixy="0.0" ixz="0.0"
+        iyy="0.00238" iyz="0.0"
+        izz="0.00470"/>
+    </inertial>
+  </link>
+
+  <!-- 除草刃ジョイント状態を追加でパブリッシュ -->
+  <gazebo>
+    <plugin filename="gz-sim-joint-state-publisher-system"
+            name="gz::sim::systems::JointStatePublisher">
+      <topic>/robot2/joint_states</topic>
+      <joint_name>robot2/weeder_joint</joint_name>
+    </plugin>
+  </gazebo>
+
+</robot>
