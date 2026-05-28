@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
 spawn_weeds.py
-Gazebo Harmonic上に雑草モデルをランダムに配置するスクリプト
+路肩エリア (Y=4.5〜7.0) に雑草をランダム配置するスクリプト
 
-ros_gz_sim create コマンドをサブプロセスで呼び出すことで
-SpawnEntityサービスへの依存を排除し、確実にスポーンを行う。
+座標系:
+  X軸: 道路進行方向 (-18〜+18m)
+  Y軸: 路肩方向 (4.5〜7.0m が路肩雑草帯)
 """
 import math
 import os
@@ -21,25 +22,30 @@ try:
 except Exception:
     _PKG_MODELS = ''
 
-# ---- 設定パラメータ (環境変数で上書き可能) ----
-NUM_WEEDS        = int(os.getenv('WEED_COUNT',       '40'))
-FIELD_SIZE       = float(os.getenv('FIELD_SIZE',     '18.0'))
-SMALL_RATIO      = float(os.getenv('SMALL_RATIO',    '0.65'))
-EXCL_RADIUS      = float(os.getenv('EXCL_RADIUS',    '2.5'))
-SPAWN_TIMEOUT    = float(os.getenv('SPAWN_TIMEOUT',  '8.0'))
+# ---- 路肩エリア設定 ----
+NUM_WEEDS     = int(os.getenv('WEED_COUNT',     '50'))
+X_MIN         = float(os.getenv('X_MIN',       '-18.0'))
+X_MAX         = float(os.getenv('X_MAX',        '18.0'))
+Y_MIN         = float(os.getenv('Y_MIN',         '4.5'))   # 縁石より内側
+Y_MAX         = float(os.getenv('Y_MAX',         '7.0'))   # ガードレール手前
+SMALL_RATIO   = float(os.getenv('SMALL_RATIO',   '0.6'))
+SPAWN_TIMEOUT = float(os.getenv('SPAWN_TIMEOUT', '8.0'))
+
+# ロボット初期位置 (スポーン除外円の中心)
+ROBOT_INIT_POSITIONS = [
+    (-4.0,  5.5),
+    (-8.0,  5.5),
+    (-12.0, 5.5),
+]
+EXCL_RADIUS = 2.5
 
 
 def find_model_sdf(model_type: str) -> str | None:
-    """モデルSDFファイルを探索してパスを返す。見つからなければNone。"""
-    candidates = [
-        _PKG_MODELS,
-        os.path.expanduser('~/.gz/models'),
-        os.path.expanduser('~/.gazebo/models'),
-    ]
-    # AMENT_PREFIX_PATH 内のすべてのshareディレクトリを検索
+    candidates = [_PKG_MODELS, os.path.expanduser('~/.gz/models')]
     for prefix in os.getenv('AMENT_PREFIX_PATH', '').split(':'):
-        candidates.append(os.path.join(prefix, 'share', 'farm_gazebo', 'models'))
-
+        candidates.append(
+            os.path.join(prefix, 'share', 'farm_gazebo', 'models')
+        )
     for base in candidates:
         if not base:
             continue
@@ -50,16 +56,10 @@ def find_model_sdf(model_type: str) -> str | None:
 
 
 def generate_inline_sdf(name: str, model_type: str) -> str:
-    """モデルファイルが見つからない場合のインラインSDF"""
-    if model_type == 'weed_small':
-        radius, height = 0.06, 0.12
-    else:
-        radius, height = 0.12, 0.25
+    radius, height = (0.06, 0.12) if model_type == 'weed_small' else (0.12, 0.25)
     return (
-        f'<?xml version="1.0"?>'
-        f'<sdf version="1.9">'
-        f'<model name="{name}">'
-        f'<static>true</static>'
+        f'<?xml version="1.0"?><sdf version="1.9">'
+        f'<model name="{name}"><static>true</static>'
         f'<link name="weed_link">'
         f'<visual name="v"><pose>0 0 {height/2:.3f} 0 0 0</pose>'
         f'<geometry><cylinder><radius>{radius}</radius>'
@@ -72,81 +72,71 @@ def generate_inline_sdf(name: str, model_type: str) -> str:
     )
 
 
+def is_near_robot(x: float, y: float) -> bool:
+    return any(
+        math.sqrt((x - rx)**2 + (y - ry)**2) < EXCL_RADIUS
+        for rx, ry in ROBOT_INIT_POSITIONS
+    )
+
+
 def spawn_entity(name: str, sdf_path: str | None, sdf_str: str | None,
                  x: float, y: float, yaw: float) -> bool:
-    """ros2 run ros_gz_sim create でエンティティをスポーンする"""
-    cmd = [
-        'ros2', 'run', 'ros_gz_sim', 'create',
-        '-name', name,
-        '-x', f'{x:.4f}',
-        '-y', f'{y:.4f}',
-        '-z', '0.005',
-        '-Y', f'{yaw:.4f}',
-    ]
-
-    if sdf_path:
-        cmd += ['-file', sdf_path]
-    else:
-        # インラインSDFを一時ファイルに書き出す
-        import tempfile
-        with tempfile.NamedTemporaryFile(
-            mode='w', suffix='.sdf', delete=False
-        ) as tmp:
+    import tempfile
+    use_tmp = sdf_path is None
+    if use_tmp:
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.sdf', delete=False) as tmp:
             tmp.write(sdf_str)
             tmp_path = tmp.name
-        cmd += ['-file', tmp_path]
+    else:
+        tmp_path = sdf_path
 
+    cmd = [
+        'ros2', 'run', 'ros_gz_sim', 'create',
+        '-name', name, '-file', tmp_path,
+        '-x', f'{x:.4f}', '-y', f'{y:.4f}', '-z', '0.005',
+        '-Y', f'{yaw:.4f}',
+    ]
     try:
         result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=SPAWN_TIMEOUT,
+            cmd, capture_output=True, text=True, timeout=SPAWN_TIMEOUT
         )
-        if sdf_path is None and 'tmp_path' in locals():
-            os.unlink(tmp_path)
-
-        if result.returncode == 0:
-            return True
-        print(f'[spawn] 失敗 {name}: {result.stderr.strip()}', file=sys.stderr)
-        return False
-    except subprocess.TimeoutExpired:
-        print(f'[spawn] タイムアウト {name}', file=sys.stderr)
-        return False
+        return result.returncode == 0
     except Exception as e:
         print(f'[spawn] エラー {name}: {e}', file=sys.stderr)
         return False
+    finally:
+        if use_tmp and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
 
 
 def main() -> None:
-    print(f'[weed_spawner] 雑草スポーン開始: {NUM_WEEDS}本, '
-          f'フィールド{FIELD_SIZE}m x {FIELD_SIZE}m')
+    print(
+        f'[weed_spawner] 路肩雑草スポーン開始\n'
+        f'  対象エリア: X=[{X_MIN}, {X_MAX}]m  Y=[{Y_MIN}, {Y_MAX}]m\n'
+        f'  目標本数: {NUM_WEEDS}本'
+    )
 
     sdf_paths = {
         'weed_small': find_model_sdf('weed_small'),
         'weed_large': find_model_sdf('weed_large'),
     }
-    for model_type, path in sdf_paths.items():
-        if path:
-            print(f'[weed_spawner] モデル発見: {model_type} → {path}')
-        else:
-            print(f'[weed_spawner] モデルファイル未発見 ({model_type}): インラインSDFを使用')
+    for mt, p in sdf_paths.items():
+        print(f'  {mt}: {p if p else "インラインSDF使用"}')
 
-    half      = FIELD_SIZE / 2.0
-    spawned   = 0
-    attempts  = 0
-    max_att   = NUM_WEEDS * 5
+    spawned  = 0
+    attempts = 0
+    max_att  = NUM_WEEDS * 6
 
     while spawned < NUM_WEEDS and attempts < max_att:
         attempts += 1
-        x = random.uniform(-half, half)
-        y = random.uniform(-half, half)
+        x = random.uniform(X_MIN, X_MAX)
+        y = random.uniform(Y_MIN, Y_MAX)
 
-        if math.sqrt(x * x + y * y) < EXCL_RADIUS:
+        if is_near_robot(x, y):
             continue
 
         model_type = 'weed_small' if random.random() < SMALL_RATIO else 'weed_large'
-        yaw  = random.uniform(0, math.pi * 2)
+        yaw  = random.uniform(0.0, math.pi * 2)
         name = f'weed_{spawned:03d}'
 
         sdf_path = sdf_paths.get(model_type)
@@ -155,11 +145,10 @@ def main() -> None:
         if spawn_entity(name, sdf_path, sdf_str, x, y, yaw):
             spawned += 1
             if spawned % 10 == 0:
-                print(f'[weed_spawner] {spawned}/{NUM_WEEDS} 本配置完了')
-            time.sleep(0.05)   # Gazeboへの連続リクエストを少し間引く
+                print(f'[weed_spawner] {spawned}/{NUM_WEEDS} 本配置済み')
+            time.sleep(0.05)
 
-    print(f'[weed_spawner] 完了: {spawned}/{NUM_WEEDS}本 '
-          f'(試行{attempts}回)')
+    print(f'[weed_spawner] 完了: {spawned}/{NUM_WEEDS}本 (試行{attempts}回)')
 
 
 if __name__ == '__main__':
