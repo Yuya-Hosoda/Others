@@ -6,7 +6,11 @@ spawn_weeds.py
 座標系:
   X軸: 道路進行方向 (-18〜+18m)
   Y軸: 路肩方向 (4.5〜7.0m が路肩雑草帯)
+
+スポーン完了後、配置した雑草の位置情報を
+/swarm/weed_registry (std_msgs/String JSON) へパブリッシュする。
 """
+import json
 import math
 import os
 import random
@@ -109,6 +113,36 @@ def spawn_entity(name: str, sdf_path: str | None, sdf_str: str | None,
             os.unlink(tmp_path)
 
 
+def publish_weed_registry(weed_records: list[dict]) -> None:
+    """スポーン完了後、雑草レジストリを /swarm/weed_registry へパブリッシュ。"""
+    try:
+        import rclpy
+        from rclpy.node import Node
+        from std_msgs.msg import String
+
+        rclpy.init()
+        node = Node('weed_registry_publisher')
+        pub = node.create_publisher(String, '/swarm/weed_registry', 10)
+
+        payload = json.dumps({'weeds': weed_records})
+        msg = String()
+        msg.data = payload
+
+        # QoSが安定するまで少し待ち、複数回パブリッシュして確実に届ける
+        time.sleep(1.0)
+        for _ in range(5):
+            pub.publish(msg)
+            time.sleep(0.1)
+
+        node.get_logger().info(
+            f'[weed_registry] {len(weed_records)}本の雑草位置を /swarm/weed_registry へ送信'
+        )
+        node.destroy_node()
+        rclpy.shutdown()
+    except Exception as e:
+        print(f'[weed_spawner] registry publish失敗 (非致命的): {e}', file=sys.stderr)
+
+
 def main() -> None:
     print(
         f'[weed_spawner] 路肩雑草スポーン開始\n'
@@ -123,9 +157,10 @@ def main() -> None:
     for mt, p in sdf_paths.items():
         print(f'  {mt}: {p if p else "インラインSDF使用"}')
 
-    spawned  = 0
-    attempts = 0
-    max_att  = NUM_WEEDS * 6
+    spawned      = 0
+    attempts     = 0
+    max_att      = NUM_WEEDS * 6
+    weed_records: list[dict] = []
 
     while spawned < NUM_WEEDS and attempts < max_att:
         attempts += 1
@@ -143,12 +178,16 @@ def main() -> None:
         sdf_str  = None if sdf_path else generate_inline_sdf(name, model_type)
 
         if spawn_entity(name, sdf_path, sdf_str, x, y, yaw):
+            weed_records.append({'name': name, 'x': x, 'y': y, 'removed': False})
             spawned += 1
             if spawned % 10 == 0:
                 print(f'[weed_spawner] {spawned}/{NUM_WEEDS} 本配置済み')
             time.sleep(0.05)
 
     print(f'[weed_spawner] 完了: {spawned}/{NUM_WEEDS}本 (試行{attempts}回)')
+
+    # スポーン完了後にレジストリをパブリッシュ
+    publish_weed_registry(weed_records)
 
 
 if __name__ == '__main__':

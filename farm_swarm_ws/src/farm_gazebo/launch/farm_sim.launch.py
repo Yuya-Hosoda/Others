@@ -16,6 +16,7 @@ farm_sim.launch.py
   4. ros_gz_bridge
   5. 共有マップノード
   6. 雑草スポーン (路肩エリアのみ)
+  7. 知覚モジュール (SLAM, 雑草検出, 除草, 境界拘束)
 """
 import os
 import xacro
@@ -24,15 +25,18 @@ from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import (
     ExecuteProcess,
+    IncludeLaunchDescription,
     OpaqueFunction,
     TimerAction,
 )
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 
 
 def launch_setup(context, *args, **kwargs):
-    pkg_desc = get_package_share_directory('farm_description')
-    pkg_gz   = get_package_share_directory('farm_gazebo')
+    pkg_desc        = get_package_share_directory('farm_description')
+    pkg_gz          = get_package_share_directory('farm_gazebo')
+    pkg_perception  = get_package_share_directory('farm_perception')
 
     use_sim_time = {'use_sim_time': True}
 
@@ -140,6 +144,16 @@ def launch_setup(context, *args, **kwargs):
         )
     ])
 
+    # ---- 7. 知覚モジュール (SLAM + 雑草検出 + 除草 + 境界拘束、12秒後) ----
+    # bridgeとshared_mapが起動してからperceptionを開始
+    perception = TimerAction(period=12.0, actions=[
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                os.path.join(pkg_perception, 'launch', 'perception.launch.py')
+            )
+        )
+    ])
+
     return [
         gz_sim,
         *rsp_nodes,
@@ -147,6 +161,7 @@ def launch_setup(context, *args, **kwargs):
         bridge,
         shared_map,
         weed_spawner,
+        perception,
     ]
 
 
