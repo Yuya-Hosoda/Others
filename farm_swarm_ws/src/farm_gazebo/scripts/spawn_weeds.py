@@ -30,8 +30,8 @@ except Exception:
 NUM_WEEDS     = int(os.getenv('WEED_COUNT',     '50'))
 X_MIN         = float(os.getenv('X_MIN',       '-18.0'))
 X_MAX         = float(os.getenv('X_MAX',        '18.0'))
-Y_MIN         = float(os.getenv('Y_MIN',         '4.5'))   # 縁石より内側
-Y_MAX         = float(os.getenv('Y_MAX',         '7.0'))   # ガードレール手前
+Y_MIN         = float(os.getenv('Y_MIN',         '4.1'))   # 路肩・道路境界付近
+Y_MAX         = float(os.getenv('Y_MAX',         '5.4'))   # Robot②除草刃の届く範囲内
 SMALL_RATIO   = float(os.getenv('SMALL_RATIO',   '0.6'))
 SPAWN_TIMEOUT = float(os.getenv('SPAWN_TIMEOUT', '8.0'))
 

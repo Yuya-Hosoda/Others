@@ -28,6 +28,8 @@ setup(
             'weed_detector_node     = farm_perception.weed_detector_node:main',
             'weed_removal_node      = farm_perception.weed_removal_node:main',
             'boundary_enforcer_node = farm_perception.boundary_enforcer_node:main',
+            'robot1_navigator_node  = farm_perception.robot1_navigator_node:main',
+            'convoy_controller_node = farm_perception.convoy_controller_node:main',
         ],
     },
 )

@@ -91,10 +91,9 @@ class BoundaryEnforcerNode(Node):
     def _compute_correction(self, x: float, y: float,
                              yaw: float) -> Twist | None:
         """
-        境界ゾーンに入っている場合のみTwistを返す。
-        正常範囲ではNoneを返してrobotの自律制御を妨げない。
+        危険ゾーン (境界から 0.3m 以内) に入った場合のみ強制停止・反転。
+        警戒ゾーンでの補正は行わない (ナビゲータ/縦列制御と競合しないため)。
         """
-        # 各境界への距離 (負なら越境)
         dist_x_min = x - X_MIN
         dist_x_max = X_MAX - x
         dist_y_min = y - Y_MIN
@@ -102,57 +101,37 @@ class BoundaryEnforcerNode(Node):
 
         in_danger = (dist_x_min < DANGER_DIST or dist_x_max < DANGER_DIST or
                      dist_y_min < DANGER_DIST or dist_y_max < DANGER_DIST)
-        in_warn   = (dist_x_min < WARN_DIST or dist_x_max < WARN_DIST or
-                     dist_y_min < WARN_DIST or dist_y_max < WARN_DIST)
 
-        if not in_warn:
+        if not in_danger:
             return None
 
-        twist = Twist()
+        # 世界座標系での反発ベクトルを計算
         cos_y, sin_y = math.cos(yaw), math.sin(yaw)
-
-        # 世界座標系での補正ベクトル
         fx, fy = 0.0, 0.0
 
-        if dist_x_min < WARN_DIST:
-            strength = (WARN_DIST - dist_x_min) / WARN_DIST
-            fx += strength * MAX_CORRECTION_LINEAR
-        if dist_x_max < WARN_DIST:
-            strength = (WARN_DIST - dist_x_max) / WARN_DIST
-            fx -= strength * MAX_CORRECTION_LINEAR
-        if dist_y_min < WARN_DIST:
-            strength = (WARN_DIST - dist_y_min) / WARN_DIST
-            fy += strength * MAX_CORRECTION_LINEAR
-        if dist_y_max < WARN_DIST:
-            strength = (WARN_DIST - dist_y_max) / WARN_DIST
-            fy -= strength * MAX_CORRECTION_LINEAR
+        if dist_x_min < DANGER_DIST:
+            fx += MAX_CORRECTION_LINEAR
+        if dist_x_max < DANGER_DIST:
+            fx -= MAX_CORRECTION_LINEAR
+        if dist_y_min < DANGER_DIST:
+            fy += MAX_CORRECTION_LINEAR
+        if dist_y_max < DANGER_DIST:
+            fy -= MAX_CORRECTION_LINEAR
 
-        # ロボット座標系へ変換
         vx_robot =  cos_y * fx + sin_y * fy
         vy_robot = -sin_y * fx + cos_y * fy
 
-        if in_danger:
-            # 危険ゾーン: 強制停止・反転
-            twist.linear.x  = _clamp(vx_robot * 2.0,
-                                      -MAX_CORRECTION_LINEAR,
-                                       MAX_CORRECTION_LINEAR)
-            twist.angular.z = _clamp(vy_robot * 3.0,
-                                      -MAX_CORRECTION_ANGULAR,
-                                       MAX_CORRECTION_ANGULAR)
-            self.get_logger().warn(
-                f'境界危険ゾーン: ({x:.1f},{y:.1f}) '
-                f'補正: vx={twist.linear.x:.2f} wz={twist.angular.z:.2f}',
-                throttle_duration_sec=1.0,
-            )
-        else:
-            # 警戒ゾーン: 緩やかな補正
-            twist.linear.x  = _clamp(vx_robot * 0.8,
-                                      -MAX_CORRECTION_LINEAR * 0.5,
-                                       MAX_CORRECTION_LINEAR * 0.5)
-            twist.angular.z = _clamp(vy_robot * 1.5,
-                                      -MAX_CORRECTION_ANGULAR * 0.5,
-                                       MAX_CORRECTION_ANGULAR * 0.5)
+        twist = Twist()
+        twist.linear.x  = _clamp(vx_robot * 2.0,
+                                  -MAX_CORRECTION_LINEAR, MAX_CORRECTION_LINEAR)
+        twist.angular.z = _clamp(vy_robot * 3.0,
+                                  -MAX_CORRECTION_ANGULAR, MAX_CORRECTION_ANGULAR)
 
+        self.get_logger().warn(
+            f'境界危険ゾーン: ({x:.1f},{y:.1f}) '
+            f'補正: vx={twist.linear.x:.2f} wz={twist.angular.z:.2f}',
+            throttle_duration_sec=1.0,
+        )
         return twist
 
 

@@ -28,7 +28,7 @@ from std_msgs.msg import String
 
 # Robot ②のURDFで定義した除草刃の取付オフセット (base_linkからの距離)
 BLADE_OFFSET_X =  0.05   # [m]
-BLADE_OFFSET_Y =  0.28   # [m]  (+Y: 路肩方向)
+BLADE_OFFSET_Y = -0.28   # [m]  (-Y: 道路境界側、右側面)
 BLADE_OFFSET_Z = -0.04   # [m]
 BLADE_RADIUS   =  0.14   # [m]  回転刃半径
 REMOVAL_DIST   =  BLADE_RADIUS + 0.08   # 有効除草距離 [m]
