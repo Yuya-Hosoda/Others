@@ -20,7 +20,7 @@ import time
 
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, ReliabilityPolicy
+from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy
 
 from nav_msgs.msg import Odometry
 from std_msgs.msg import String
@@ -48,15 +48,23 @@ class WeedRemovalNode(Node):
 
         qos_sensor = QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT)
 
+        # weed_registry は TransientLocal で受信:
+        # spawn_weeds.py が終了した後でも最後のメッセージを受け取れる
+        qos_registry = QoSProfile(
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        )
+
         self.create_subscription(
             Odometry, '/robot2/odom', self._odom_callback, qos_sensor
         )
         self.create_subscription(
-            String, '/swarm/weed_registry', self._registry_callback, 10
+            String, '/swarm/weed_registry', self._registry_callback, qos_registry
         )
 
         self.removed_pub  = self.create_publisher(String, '/swarm/weed_removed', 10)
-        self.registry_pub = self.create_publisher(String, '/swarm/weed_registry', 10)
+        self.registry_pub = self.create_publisher(String, '/swarm/weed_registry', qos_registry)
 
         # 10Hzで近接チェック
         self.create_timer(0.1, self._check_proximity)

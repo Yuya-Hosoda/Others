@@ -118,25 +118,34 @@ def publish_weed_registry(weed_records: list[dict]) -> None:
     try:
         import rclpy
         from rclpy.node import Node
+        from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy
         from std_msgs.msg import String
 
         rclpy.init()
         node = Node('weed_registry_publisher')
-        pub = node.create_publisher(String, '/swarm/weed_registry', 10)
+
+        # TransientLocal: ノード終了後も最後のメッセージを保持し、
+        # 遅れて接続した購読者 (weed_removal_node) にも届ける
+        qos = QoSProfile(
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        )
+        pub = node.create_publisher(String, '/swarm/weed_registry', qos)
 
         payload = json.dumps({'weeds': weed_records})
         msg = String()
         msg.data = payload
 
-        # QoSが安定するまで少し待ち、複数回パブリッシュして確実に届ける
-        time.sleep(1.0)
-        for _ in range(5):
-            pub.publish(msg)
-            time.sleep(0.1)
+        # RMW層が QoS を確立するまで待機してからパブリッシュ
+        time.sleep(0.5)
+        pub.publish(msg)
 
         node.get_logger().info(
-            f'[weed_registry] {len(weed_records)}本の雑草位置を /swarm/weed_registry へ送信'
+            f'[weed_registry] {len(weed_records)}本の雑草位置を /swarm/weed_registry へ送信 (TransientLocal)'
         )
+        # メッセージが配送されるまで少し待つ
+        time.sleep(1.0)
         node.destroy_node()
         rclpy.shutdown()
     except Exception as e:
