@@ -13,72 +13,66 @@ import xacro
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch_ros.actions import Node
-from launch_ros.substitutions import FindPackageShare
+
+
+def launch_setup(context, *args, **kwargs):
+    pkg_desc = get_package_share_directory('farm_description')
+    robot = context.launch_configurations['robot']
+
+    urdf_map = {
+        'robot1': 'robot1_scout.urdf.xacro',
+        'robot2': 'robot2_weeder.urdf.xacro',
+        'robot3': 'robot3_collector.urdf.xacro',
+    }
+    urdf_file = os.path.join(pkg_desc, 'urdf', urdf_map[robot])
+    robot_desc = xacro.process_file(urdf_file).toxml()
+
+    # robot_state_publisher: /robot_description にパブリッシュ
+    rsp = Node(
+        package='robot_state_publisher',
+        executable='robot_state_publisher',
+        name='robot_state_publisher',
+        parameters=[{
+            'robot_description': robot_desc,
+            'publish_frequency': 50.0,
+        }],
+        remappings=[
+            ('/robot_description', '/robot_description'),
+        ],
+        output='screen',
+    )
+
+    # joint_state_publisher_gui: スライダーでジョイント操作
+    jsp_gui = Node(
+        package='joint_state_publisher_gui',
+        executable='joint_state_publisher_gui',
+        name='joint_state_publisher_gui',
+        output='screen',
+    )
+
+    # RViz2設定ファイル
+    rviz_cfg = os.path.join(pkg_desc, 'config', 'display.rviz')
+    rviz_args = ['-d', rviz_cfg] if os.path.exists(rviz_cfg) else []
+
+    rviz = Node(
+        package='rviz2',
+        executable='rviz2',
+        name='rviz2',
+        arguments=rviz_args,
+        output='screen',
+    )
+    return [rsp, jsp_gui, rviz]
 
 
 def generate_launch_description():
-    pkg_desc = get_package_share_directory('farm_description')
-
-    # 表示するロボットを引数で選択
-    robot_arg = DeclareLaunchArgument(
-        'robot',
-        default_value='robot1',
-        description='表示するロボット名 (robot1 / robot2 / robot3)',
-        choices=['robot1', 'robot2', 'robot3'],
-    )
-    robot_name = LaunchConfiguration('robot')
-
-    def get_robot_description(context, *args, **kwargs):
-        robot = context.launch_configurations['robot']
-        urdf_file = os.path.join(
-            pkg_desc, 'urdf', f'{robot}_scout.urdf.xacro'
-            if robot == 'robot1' else
-            f'{robot}_weeder.urdf.xacro'
-            if robot == 'robot2' else
-            f'{robot}_collector.urdf.xacro'
-        )
-        doc = xacro.process_file(urdf_file)
-        return doc.toxml()
-
-    from launch.actions import OpaqueFunction
-
-    def launch_setup(context):
-        robot = context.launch_configurations['robot']
-        urdf_map = {
-            'robot1': 'robot1_scout.urdf.xacro',
-            'robot2': 'robot2_weeder.urdf.xacro',
-            'robot3': 'robot3_collector.urdf.xacro',
-        }
-        urdf_file = os.path.join(pkg_desc, 'urdf', urdf_map[robot])
-        robot_desc = xacro.process_file(urdf_file).toxml()
-
-        rsp = Node(
-            package='robot_state_publisher',
-            executable='robot_state_publisher',
-            name='robot_state_publisher',
-            parameters=[{'robot_description': robot_desc}],
-            output='screen',
-        )
-        jsp_gui = Node(
-            package='joint_state_publisher_gui',
-            executable='joint_state_publisher_gui',
-            name='joint_state_publisher_gui',
-            output='screen',
-        )
-        rviz_cfg = os.path.join(pkg_desc, 'config', 'display.rviz')
-        rviz = Node(
-            package='rviz2',
-            executable='rviz2',
-            name='rviz2',
-            arguments=['-d', rviz_cfg] if os.path.exists(rviz_cfg) else [],
-            output='screen',
-        )
-        return [rsp, jsp_gui, rviz]
-
     return LaunchDescription([
-        robot_arg,
+        DeclareLaunchArgument(
+            'robot',
+            default_value='robot1',
+            description='表示するロボット名 (robot1 / robot2 / robot3)',
+            choices=['robot1', 'robot2', 'robot3'],
+        ),
         OpaqueFunction(function=launch_setup),
     ])

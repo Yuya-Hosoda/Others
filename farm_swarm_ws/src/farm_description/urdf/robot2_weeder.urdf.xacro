@@ -1,6 +1,12 @@
 <?xml version="1.0"?>
 <!--
   Robot ② 除草ロボット (Weeder)
+  路肩除草想定:
+    - ロボットはX軸+方向に進行 (道路方向)
+    - ロボットは路肩 (Y=5.5) を走行
+    - 雑草は路肩内側 (道路との境目、Y≈4〜5.5) に生育
+    - RGBDカメラと除草刃は右側面 (-Y方向、道路境界側) に搭載
+
   搭載センサ・機器:
     - RealSense D435 RGBD (右側面: 雑草検出)
     - 回転除草刃 (右側面下部)
@@ -14,7 +20,7 @@
   <!-- 差動駆動台車 (緑色) -->
   <xacro:diff_drive_base robot_name="robot2" color="green"/>
 
-  <!-- 右側方RGBD: 除草対象検出用 -->
+  <!-- 右側方RGBD: 道路境界方向 (-Y) の除草対象検出用 -->
   <xacro:realsense_d435
     prefix="robot2_side"
     parent="robot2/base_link"
@@ -22,7 +28,7 @@
     rpy="0.0 0.3 ${-PI/2}"
     robot="robot2"/>
 
-  <!-- 除草機構: 回転刃 (右側面下部) -->
+  <!-- 除草機構: 回転刃 (右側面下部, 道路境界方向) -->
   <joint name="robot2/weeder_joint" type="continuous">
     <parent link="robot2/base_link"/>
     <child  link="robot2/weeder_blade"/>
@@ -52,7 +58,6 @@
     </inertial>
   </link>
 
-  <!-- 除草刃ジョイント状態を追加でパブリッシュ -->
   <gazebo>
     <plugin filename="gz-sim-joint-state-publisher-system"
             name="gz::sim::systems::JointStatePublisher">

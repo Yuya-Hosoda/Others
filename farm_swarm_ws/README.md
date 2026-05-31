@@ -1,6 +1,11 @@
-# Farm Swarm Robots - Phase 1: シミュレーション環境構築
+# Farm Swarm Robots - Phase 2: 知覚モジュール実装
 
 3台の小型自律移動ロボットによる協調除草システムのシミュレーション環境です。
+
+**Phase 2 追加機能:**
+- Robot ①: SLAM (LiDAR → OccupancyGridマップ)
+- Robot ②: 雑草検出 (側方RGBD → HSV/YOLOv8) + 除草刃接触による雑草除去
+- 全ロボット: 路肩作業エリア境界拘束 (飛び出し防止)
 
 ## システム構成
 
@@ -191,6 +196,22 @@ sudo apt install -y \
   python3-pip
 ```
 
+### 3-5. Phase 2 依存パッケージ (知覚モジュール)
+
+```bash
+# SLAM Toolbox (Robot①のLiDAR地図作成)
+sudo apt install -y ros-jazzy-slam-toolbox
+
+# PointCloud→LaserScan変換 (3D→2D、SLAM入力用)
+sudo apt install -y ros-jazzy-pointcloud-to-laserscan
+
+# OpenCV (Python版、雑草HSV検出用)
+sudo apt install -y python3-opencv ros-jazzy-cv-bridge
+```
+
+> **YOLOv8 (オプション):** 実機運用時に使用。シミュレーション内ではHSV検出で代替します。
+> YOLOv8を使う場合は `pip install ultralytics` を実行してください。
+
 ### 3-5. 動作確認
 
 ```bash
@@ -290,12 +311,13 @@ ros2 launch farm_gazebo farm_sim.launch.py
 ```
 
 **起動順序 (自動):**
-- `0秒`: Gazebo起動・農地ワールドロード
+- `0秒`: Gazebo起動・路肩ワールドロード
 - `3秒`: robot_state_publisher起動 (3台分)
-- `5秒`: 3台のロボットがGazebo上にスポーン
+- `5秒`: 3台のロボットが路肩に縦列スポーン
 - `6秒`: ros_gz_bridgeが起動 (センサデータのROS2ブリッジ)
 - `8秒`: 共有マップノード起動
-- `10秒`: 雑草スポーン (40本)
+- `10秒`: 雑草スポーン (路肩エリアに50本) + 位置レジストリ配信
+- `12秒`: 知覚モジュール起動 (SLAM + 雑草検出 + 除草 + 境界拘束)
 
 > Gazebo GUIウィンドウが開くまで30秒程度かかる場合があります
 
@@ -321,13 +343,19 @@ ros2 topic list | grep -E "(robot[123]|swarm)"
 /robot1/odom
 /robot1/joint_states
 /robot1/lidar/points
+/robot1/scan_2d
 /robot1/rgbd/robot1_front/image
 /robot1/rgbd/robot1_front/depth_image
 /robot2/cmd_vel
 /robot2/odom
+/robot2/weed_detections
+/robot2/weed_detect_image
 ...
 /swarm/shared_map
 /swarm/robot_status
+/swarm/weed_registry
+/swarm/weed_removed
+/map
 ```
 
 ### 6-2. 各センサのデータ確認
@@ -347,6 +375,15 @@ ros2 topic echo /swarm/shared_map --field info
 
 # ロボット状態JSON確認
 ros2 topic echo /swarm/robot_status
+
+# SLAM地図の確認 (SLAMが起動してから)
+ros2 topic echo /map --field info
+
+# 雑草検出マーカーの確認
+ros2 topic echo /robot2/weed_detections
+
+# 雑草レジストリの確認
+ros2 topic echo /swarm/weed_registry
 ```
 
 ### 6-3. キーボードでロボットを手動操作
@@ -404,41 +441,46 @@ farm_swarm_ws/
 ├── README.md                         ← このファイル
 └── src/
     ├── farm_description/             パッケージ①: ロボットURDF
-    │   ├── package.xml
-    │   ├── CMakeLists.txt
     │   ├── urdf/
     │   │   ├── common/
     │   │   │   ├── base.urdf.xacro       # 共通差動駆動台車
     │   │   │   ├── lidar.urdf.xacro      # VLP-16相当LiDARマクロ
     │   │   │   └── rgbd.urdf.xacro       # RealSense D435相当RGBDマクロ
     │   │   ├── robot1_scout.urdf.xacro   # ① 先導ロボット
-    │   │   ├── robot2_weeder.urdf.xacro  # ② 除草ロボット
+    │   │   ├── robot2_weeder.urdf.xacro  # ② 除草ロボット (左側面に刃)
     │   │   └── robot3_collector.urdf.xacro # ③ 回収ロボット
     │   └── launch/
-    │       └── display.launch.py         # URViz確認用
+    │       └── display.launch.py         # RViz2 URDF確認用
     │
     ├── farm_gazebo/                  パッケージ②: Gazebo環境
-    │   ├── package.xml
-    │   ├── CMakeLists.txt
     │   ├── worlds/
-    │   │   └── farm_field.sdf            # 農地ワールド (20x20m)
+    │   │   └── road_shoulder.sdf         # 路肩ワールド (40m道路 + 路肩)
     │   ├── models/
     │   │   ├── weed_small/               # 小型雑草モデル
     │   │   └── weed_large/               # 大型雑草モデル
     │   ├── config/
     │   │   └── ros_gz_bridge.yaml        # ROS2-Gazeboトピックブリッジ設定
     │   ├── scripts/
-    │   │   └── spawn_weeds.py            # 雑草スポーンスクリプト
+    │   │   └── spawn_weeds.py            # 雑草スポーン + レジストリ配信
     │   └── launch/
     │       └── farm_sim.launch.py        # 全体起動launchファイル
     │
-    └── farm_communication/           パッケージ③: マルチエージェント通信
-        ├── package.xml
-        ├── setup.py
-        ├── farm_communication/
-        │   └── shared_map_node.py        # Bayesian統合共有マップノード
+    ├── farm_communication/           パッケージ③: マルチエージェント通信
+    │   ├── farm_communication/
+    │   │   └── shared_map_node.py        # Bayesian統合共有マップノード
+    │   └── launch/
+    │       └── swarm_comm.launch.py      # 通信ノード単体起動
+    │
+    └── farm_perception/              パッケージ④: 知覚モジュール [Phase 2]
+        ├── farm_perception/
+        │   ├── weed_detector_node.py     # 雑草検出 (HSV/YOLOv8)
+        │   ├── weed_removal_node.py      # 除草刃接触による雑草除去
+        │   └── boundary_enforcer_node.py # 作業エリア境界拘束
+        ├── config/
+        │   └── slam_params.yaml          # SLAM Toolbox パラメータ
         └── launch/
-            └── swarm_comm.launch.py      # 通信ノード単体起動
+            ├── slam.launch.py            # SLAM単体起動
+            └── perception.launch.py      # 全知覚モジュール統合起動
 ```
 
 ---
@@ -561,22 +603,29 @@ gz sim farm_field.sdf
 
 ## 動作確認チェックリスト
 
-Phase 1の完了基準:
+**Phase 1 (シミュレーション環境):**
 
-- [ ] `colcon build` が3パッケージすべて成功する
+- [ ] `colcon build` が4パッケージすべて成功する
 - [ ] `ros2 launch farm_gazebo farm_sim.launch.py` でGazeboが起動する
-- [ ] 3台のロボットがGazebo上に表示される
+- [ ] 3台のロボットが路肩に縦列スポーンされる
 - [ ] `ros2 topic list` に `/robot1/odom`, `/robot2/odom`, `/robot3/odom` が現れる
 - [ ] `ros2 topic hz /robot1/lidar/points` で約10Hzのデータが来る
 - [ ] `teleop_twist_keyboard` で各ロボットを独立して操作できる
 - [ ] `/swarm/shared_map` がパブリッシュされている
-- [ ] `/swarm/robot_status` に全ロボットの座標が含まれている
+- [ ] `/swarm/weed_registry` に雑草位置JSONが配信される
+
+**Phase 2 (知覚モジュール):**
+
+- [ ] `/robot1/scan_2d` (LaserScan) がパブリッシュされている
+- [ ] `/map` (OccupancyGrid) がパブリッシュされている (SLAMが動作)
+- [ ] `/robot2/weed_detections` (MarkerArray) がパブリッシュされている
+- [ ] Robot②が雑草に近づくと `/swarm/weed_removed` にイベントが来る
+- [ ] 境界外にロボットが出ようとすると補正速度が印加される
 
 ---
 
-## 次のステップ (Phase 2以降)
+## 次のステップ (Phase 3以降)
 
-- **Phase 2**: 知覚モジュール実装 (SLAM・YOLOv8による雑草検出)
 - **Phase 3**: マルチエージェント強化学習環境構築 (RLlib + MAPPO)
 - **Phase 4**: 3台協調学習・情報共有プロトコル統合
 
